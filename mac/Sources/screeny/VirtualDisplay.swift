@@ -40,3 +40,34 @@ final class VirtualDisplay {
         }
     }
 }
+
+/// Keeps the display alive between connections, so a reconnecting tablet gets the same
+/// screen back. It is only replaced when the requested size changes.
+final class DisplayKeeper {
+    private struct Key: Equatable {
+        let width: Int
+        let height: Int
+        let scale: Int
+    }
+
+    private let lock = NSLock()
+    private var key: Key?
+    private var display: VirtualDisplay?
+
+    func display(pixelWidth: Int, pixelHeight: Int, scale: Int, fps: Int) throws -> VirtualDisplay {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let requested = Key(width: pixelWidth, height: pixelHeight, scale: scale)
+        if requested == key, let display {
+            return display
+        }
+        // Release the old display first: both would share the same vendor and serial.
+        display = nil
+        key = nil
+        let created = try VirtualDisplay(pixelWidth: pixelWidth, pixelHeight: pixelHeight, scale: scale, fps: fps)
+        display = created
+        key = requested
+        return created
+    }
+}

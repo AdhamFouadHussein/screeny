@@ -4,7 +4,7 @@ import CoreVideo
 import Foundation
 import Network
 
-/// One connected tablet: owns its virtual display, capture, encoder and input channel.
+/// One connected tablet: owns its capture, encoder and input channel.
 ///
 /// Wire format (big-endian):
 ///   tablet -> mac  hello:  "SCRN", u32 version, u32 widthPx, u32 heightPx
@@ -17,10 +17,10 @@ final class Session {
 
     private let connection: NWConnection
     private let options: Options
+    private let displays: DisplayKeeper
     private let onEnd: () -> Void
     private let queue = DispatchQueue(label: "screeny.session")
 
-    private var display: VirtualDisplay?
     private var capture: ScreenCapture?
     private var encoder: H264Encoder?
     private var input: InputInjector?
@@ -29,9 +29,10 @@ final class Session {
     private let inFlightLock = NSLock()
     private var inFlight = 0
 
-    init(connection: NWConnection, options: Options, onEnd: @escaping () -> Void) {
+    init(connection: NWConnection, options: Options, displays: DisplayKeeper, onEnd: @escaping () -> Void) {
         self.connection = connection
         self.options = options
+        self.displays = displays
         self.onEnd = onEnd
     }
 
@@ -79,7 +80,7 @@ final class Session {
 
     private func run(width: Int, height: Int) async throws {
         let scale = options.scale ?? (max(width, height) >= 2400 ? 2 : 1)
-        let display = try VirtualDisplay(pixelWidth: width, pixelHeight: height, scale: scale, fps: options.fps)
+        let display = try displays.display(pixelWidth: width, pixelHeight: height, scale: scale, fps: options.fps)
         let encoder = try H264Encoder(width: width, height: height, fps: options.fps, bitrate: options.bitrate) { [weak self] type, pts, payload in
             self?.send(type: type, pts: pts, payload: payload)
         }
@@ -92,7 +93,6 @@ final class Session {
 
         queue.async {
             guard !self.ended else { return }
-            self.display = display
             self.encoder = encoder
             self.capture = capture
             self.input = input
@@ -149,12 +149,10 @@ final class Session {
         connection.cancel()
         let capture = self.capture
         let encoder = self.encoder
-        let display = self.display
         let onEnd = self.onEnd
         Task {
             await capture?.stop()
             encoder?.invalidate()
-            withExtendedLifetime(display) {}
             print("Tablet disconnected")
             onEnd()
         }

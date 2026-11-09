@@ -7,6 +7,7 @@ final class Server {
     private let options: Options
     private let queue = DispatchQueue(label: "screeny.server")
     private var listener: NWListener?
+    private let displays = DisplayKeeper()
     private var session: Session?
 
     init(options: Options) {
@@ -40,7 +41,7 @@ final class Server {
             connection.cancel()
             return
         }
-        let session = Session(connection: connection, options: options) { [weak self] in
+        let session = Session(connection: connection, options: options, displays: displays) { [weak self] in
             self?.queue.async { self?.session = nil }
         }
         self.session = session
