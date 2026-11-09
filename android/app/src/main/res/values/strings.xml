@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="waiting">Waiting for your Mac.\nConnect over USB and run ./run.sh</string>
+</resources>
